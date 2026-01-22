@@ -5303,6 +5303,8 @@ impl<'a> Parser<'a> {
         let db_name = self.parse_object_name(false)?;
         let mut location = None;
         let mut managed_location = None;
+        let mut default_charset = None;
+        let mut default_collation = None;
         loop {
             match self.parse_one_of_keywords(&[Keyword::LOCATION, Keyword::MANAGEDLOCATION]) {
                 Some(Keyword::LOCATION) => location = Some(self.parse_literal_string()?),
@@ -5317,6 +5319,26 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
+
+        // Parse MySQL-style [DEFAULT] CHARACTER SET and [DEFAULT] COLLATE options
+        loop {
+            let has_default = self.parse_keyword(Keyword::DEFAULT);
+            if self.parse_keywords(&[Keyword::CHARACTER, Keyword::SET])
+                || self.parse_keyword(Keyword::CHARSET)
+            {
+                self.expect_token(&Token::Eq).ok();
+                default_charset = Some(self.parse_identifier()?.value);
+            } else if self.parse_keyword(Keyword::COLLATE) {
+                self.expect_token(&Token::Eq).ok();
+                default_collation = Some(self.parse_identifier()?.value);
+            } else if has_default {
+                // DEFAULT keyword not followed by CHARACTER SET, CHARSET, or COLLATE
+                self.prev_token();
+                break;
+            } else {
+                break;
+            }
+        }
 
         Ok(Statement::CreateDatabase {
             db_name,
@@ -5334,6 +5356,8 @@ impl<'a> Parser<'a> {
             default_ddl_collation: None,
             storage_serialization_policy: None,
             comment: None,
+            default_charset,
+            default_collation,
             catalog_sync: None,
             catalog_sync_namespace_mode: None,
             catalog_sync_namespace_flatten_delimiter: None,
@@ -8920,11 +8944,20 @@ impl<'a> Parser<'a> {
             // since `CHECK` requires parentheses, we can parse the inner expression in ParserState::Normal
             let expr: Expr = self.with_state(ParserState::Normal, |p| p.parse_expr())?;
             self.expect_token(&Token::RParen)?;
+
+            let enforced = if self.parse_keyword(Keyword::ENFORCED) {
+                Some(true)
+            } else if self.parse_keywords(&[Keyword::NOT, Keyword::ENFORCED]) {
+                Some(false)
+            } else {
+                None
+            };
+
             Ok(Some(
                 CheckConstraint {
                     name: None, // Column-level check constraints don't have names
                     expr: Box::new(expr),
-                    enforced: None, // Could be extended later to support MySQL ENFORCED/NOT ENFORCED
+                    enforced,
                 }
                 .into(),
             ))
@@ -9255,7 +9288,16 @@ impl<'a> Parser<'a> {
         &mut self,
     ) -> Result<Option<TableConstraint>, ParserError> {
         let name = if self.parse_keyword(Keyword::CONSTRAINT) {
-            Some(self.parse_identifier()?)
+            if self.dialect.supports_constraint_keyword_without_name()
+                && (self.peek_keyword(Keyword::CHECK)
+                    || self.peek_keyword(Keyword::PRIMARY)
+                    || self.peek_keyword(Keyword::UNIQUE)
+                    || self.peek_keyword(Keyword::FOREIGN))
+            {
+                None
+            } else {
+                Some(self.parse_identifier()?)
+            }
         } else {
             None
         };
@@ -10143,8 +10185,8 @@ impl<'a> Parser<'a> {
             let value = self.parse_number_value()?;
             AlterTableOperation::AutoIncrement { equals, value }
         } else if self.parse_keywords(&[Keyword::REPLICA, Keyword::IDENTITY]) {
-            let identity = if self.parse_keyword(Keyword::NONE) {
-                ReplicaIdentity::None
+            let identity = if self.parse_keyword(Keyword::NOTHING) {
+                ReplicaIdentity::Nothing
             } else if self.parse_keyword(Keyword::FULL) {
                 ReplicaIdentity::Full
             } else if self.parse_keyword(Keyword::DEFAULT) {
@@ -10153,7 +10195,7 @@ impl<'a> Parser<'a> {
                 ReplicaIdentity::Index(self.parse_identifier()?)
             } else {
                 return self.expected(
-                    "NONE, FULL, DEFAULT, or USING INDEX index_name after REPLICA IDENTITY",
+                    "NOTHING, FULL, DEFAULT, or USING INDEX index_name after REPLICA IDENTITY",
                     self.peek_token(),
                 );
             };
