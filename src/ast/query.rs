@@ -450,6 +450,8 @@ pub struct Select {
     /// [MySQL](https://dev.mysql.com/doc/refman/8.4/en/optimizer-hints.html)
     /// [Oracle](https://docs.oracle.com/en/database/oracle/oracle-database/21/sqlrf/Comments.html#GUID-D316D545-89E2-4D54-977F-FC97815CD62E)
     pub optimizer_hint: Option<OptimizerHint>,
+    /// A ReadySet-specific hint, e.g. `/*rs+ CREATE CACHE */`
+    pub readyset_hint: Option<ReadysetHint>,
     /// `SELECT [DISTINCT] ...`
     pub distinct: Option<Distinct>,
     /// MySQL-specific SELECT modifiers.
@@ -522,6 +524,11 @@ impl fmt::Display for Select {
         }
 
         if let Some(hint) = self.optimizer_hint.as_ref() {
+            f.write_str(" ")?;
+            hint.fmt(f)?;
+        }
+
+        if let Some(hint) = self.readyset_hint.as_ref() {
             f.write_str(" ")?;
             hint.fmt(f)?;
         }

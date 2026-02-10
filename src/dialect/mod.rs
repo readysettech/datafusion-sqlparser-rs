@@ -1456,6 +1456,12 @@ pub trait Dialect: Debug + Any {
         false
     }
 
+    /// Returns `true` if the dialect supports ReadySet-specific hints
+    /// using the `/*rs+ ... */` comment syntax after `SELECT`.
+    fn supports_readyset_hint(&self) -> bool {
+        false
+    }
+
     /// Returns true if the dialect considers the `&&` operator as a boolean AND operator.
     fn supports_double_ampersand_operator(&self) -> bool {
         false

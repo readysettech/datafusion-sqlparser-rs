@@ -2239,6 +2239,7 @@ impl Spanned for Select {
         let Select {
             select_token,
             optimizer_hint: _,
+            readyset_hint: _,
             distinct: _, // todo
             select_modifiers: _,
             top: _, // todo, mysql specific

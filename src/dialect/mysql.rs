@@ -197,6 +197,10 @@ impl Dialect for MySqlDialect {
         true
     }
 
+    fn supports_readyset_hint(&self) -> bool {
+        true
+    }
+
     /// See: <https://dev.mysql.com/doc/refman/8.4/en/create-table.html>
     fn supports_constraint_keyword_without_name(&self) -> bool {
         true

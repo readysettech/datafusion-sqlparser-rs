@@ -1292,6 +1292,7 @@ fn parse_copy_to() {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
                     optimizer_hint: None,
+                    readyset_hint: None,
                     distinct: None,
                     select_modifiers: None,
                     top: None,
@@ -3074,6 +3075,7 @@ fn parse_array_subquery_expr() {
                     left: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
                         optimizer_hint: None,
+                        readyset_hint: None,
                         distinct: None,
                         select_modifiers: None,
                         top: None,
@@ -3102,6 +3104,7 @@ fn parse_array_subquery_expr() {
                     right: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
                         optimizer_hint: None,
+                        readyset_hint: None,
                         distinct: None,
                         select_modifiers: None,
                         top: None,
@@ -8510,6 +8513,40 @@ fn parse_create_table_partition_of_errors() {
         err.contains("at least one value"),
         "Expected error about empty TO list, got: {err}"
     );
+}
+
+#[test]
+fn test_readyset_hints_postgres() {
+    // rs+ hint works with PostgreSQL
+    pg().verified_stmt("SELECT /*rs+ CREATE CACHE */ * FROM users WHERE id = 1");
+
+    // rs+ hint with options
+    pg().verified_stmt("SELECT /*rs+ CREATE CACHE TTL 300s REFRESH 60s */ col FROM t");
+
+    // Verify hint is parsed correctly
+    let select = pg().verified_only_select("SELECT /*rs+ CREATE CACHE */ id FROM users");
+    let hint = select.readyset_hint.unwrap();
+    assert_eq!(hint.text, " CREATE CACHE ");
+
+    // Standard /*+ ... */ is NOT recognized as an optimizer hint for PostgreSQL,
+    // but the rs+ hint after it is still found
+    let select = pg().verified_only_select_with_canonical(
+        "SELECT /*+ should_be_ignored */ /*rs+ CREATE CACHE */ id FROM users",
+        "SELECT /*rs+ CREATE CACHE */ id FROM users",
+    );
+    assert!(select.optimizer_hint.is_none());
+    assert!(select.readyset_hint.is_some());
+
+    // Regular comment before rs+ hint is skipped
+    let select = pg().verified_only_select_with_canonical(
+        "SELECT /* just a comment */ /*rs+ CREATE CACHE */ id FROM users",
+        "SELECT /*rs+ CREATE CACHE */ id FROM users",
+    );
+    assert!(select.readyset_hint.is_some());
+
+    // No rs+ hint — field is None
+    let select = pg().verified_only_select("SELECT id FROM users");
+    assert!(select.readyset_hint.is_none());
 }
 
 #[test]

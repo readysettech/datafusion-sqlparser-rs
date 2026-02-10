@@ -1436,6 +1436,7 @@ fn parse_escaped_quote_identifiers_with_escape() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
                 optimizer_hint: None,
+                readyset_hint: None,
                 distinct: None,
                 select_modifiers: None,
                 top: None,
@@ -1493,6 +1494,7 @@ fn parse_escaped_quote_identifiers_with_no_escape() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
                 optimizer_hint: None,
+                readyset_hint: None,
                 distinct: None,
                 select_modifiers: None,
                 top: None,
@@ -1542,6 +1544,7 @@ fn parse_escaped_backticks_with_escape() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
                 optimizer_hint: None,
+                readyset_hint: None,
                 distinct: None,
                 select_modifiers: None,
                 top: None,
@@ -1595,6 +1598,7 @@ fn parse_escaped_backticks_with_no_escape() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
                 optimizer_hint: None,
+                readyset_hint: None,
                 distinct: None,
                 select_modifiers: None,
                 top: None,
@@ -2416,6 +2420,7 @@ fn parse_select_with_numeric_prefix_column_name() {
                 Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
                     optimizer_hint: None,
+                    readyset_hint: None,
                     distinct: None,
                     select_modifiers: None,
                     top: None,
@@ -2592,6 +2597,7 @@ fn parse_select_with_concatenation_of_exp_number_and_numeric_prefix_column() {
                 Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
                     optimizer_hint: None,
+                    readyset_hint: None,
                     distinct: None,
                     select_modifiers: None,
                     top: None,
@@ -3227,6 +3233,7 @@ fn parse_substring_in_select() {
                     body: Box::new(SetExpr::Select(Box::new(Select {
                         select_token: AttachedToken::empty(),
                         optimizer_hint: None,
+                        readyset_hint: None,
                         distinct: Some(Distinct::Distinct),
                         select_modifiers: None,
                         top: None,
@@ -3573,6 +3580,7 @@ fn parse_hex_string_introducer() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
                 optimizer_hint: None,
+                readyset_hint: None,
                 distinct: None,
                 select_modifiers: None,
                 top: None,
@@ -4641,6 +4649,44 @@ fn test_optimizer_hints() {
         "\
        DELETE /*+ foobar */ FROM table_name",
     );
+}
+
+#[test]
+fn test_readyset_hints() {
+    // Basic rs+ hint roundtrips correctly
+    mysql_and_generic().verified_stmt("SELECT /*rs+ CREATE CACHE */ * FROM users WHERE id = 1");
+
+    // rs+ hint with TTL/REFRESH options
+    mysql_and_generic()
+        .verified_stmt("SELECT /*rs+ CREATE CACHE TTL 300s REFRESH 60s */ col FROM t");
+
+    // Verify hint text is parsed correctly
+    let select =
+        mysql_and_generic().verified_only_select("SELECT /*rs+ CREATE CACHE */ id FROM users");
+    let hint = select.readyset_hint.unwrap();
+    assert_eq!(hint.text, " CREATE CACHE ");
+
+    // MySQL optimizer hint + ReadySet hint coexist on same SELECT
+    let select = mysql_and_generic()
+        .verified_only_select("SELECT /*+ SET_VAR(x=1) */ /*rs+ CREATE CACHE */ id FROM users");
+    assert!(select.optimizer_hint.is_some());
+    assert_eq!(
+        select.optimizer_hint.as_ref().unwrap().text,
+        " SET_VAR(x=1) "
+    );
+    let rs_hint = select.readyset_hint.unwrap();
+    assert_eq!(rs_hint.text, " CREATE CACHE ");
+
+    // Regular comment between keyword and rs+ hint is skipped
+    let select = mysql_and_generic().verified_only_select_with_canonical(
+        "SELECT /* regular comment */ /*rs+ CREATE CACHE */ id FROM users",
+        "SELECT /*rs+ CREATE CACHE */ id FROM users",
+    );
+    assert!(select.readyset_hint.is_some());
+
+    // No rs+ hint present — field is None
+    let select = mysql_and_generic().verified_only_select("SELECT id FROM users");
+    assert!(select.readyset_hint.is_none());
 }
 
 #[test]

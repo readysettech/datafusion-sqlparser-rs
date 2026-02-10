@@ -42,6 +42,7 @@ fn parse_map_access_expr() {
         Select {
             select_token: AttachedToken::empty(),
             optimizer_hint: None,
+            readyset_hint: None,
             distinct: None,
             select_modifiers: None,
             top: None,

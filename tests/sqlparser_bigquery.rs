@@ -2682,6 +2682,7 @@ fn test_export_data() {
                         Span::empty()
                     )),
                     optimizer_hint: None,
+                    readyset_hint: None,
                     distinct: None,
                     select_modifiers: None,
                     top: None,
@@ -2788,6 +2789,7 @@ fn test_export_data() {
                         Span::empty()
                     )),
                     optimizer_hint: None,
+                    readyset_hint: None,
                     distinct: None,
                     select_modifiers: None,
                     top: None,

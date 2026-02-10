@@ -281,6 +281,10 @@ impl Dialect for GenericDialect {
         true
     }
 
+    fn supports_readyset_hint(&self) -> bool {
+        true
+    }
+
     fn supports_constraint_keyword_without_name(&self) -> bool {
         true
     }

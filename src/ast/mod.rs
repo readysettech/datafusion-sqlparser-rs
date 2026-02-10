@@ -11586,6 +11586,31 @@ impl fmt::Display for OptimizerHint {
     }
 }
 
+/// The comment prefix used for ReadySet-specific hints,
+/// e.g. `/*rs+ CREATE CACHE */`.
+pub const READYSET_HINT_PREFIX: &str = "rs+";
+
+/// A ReadySet-specific hint embedded in a SQL comment using the
+/// [`READYSET_HINT_PREFIX`] prefix, e.g. `/*rs+ CREATE CACHE TTL 300s */`.
+///
+/// See [Select::readyset_hint]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "visitor", derive(Visit, VisitMut))]
+pub struct ReadysetHint {
+    /// The raw text of the hint without its `/*rs+ ... */` markers.
+    pub text: String,
+}
+
+impl fmt::Display for ReadysetHint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("/*")?;
+        f.write_str(READYSET_HINT_PREFIX)?;
+        f.write_str(&self.text)?;
+        f.write_str("*/")
+    }
+}
+
 impl fmt::Display for ResetStatement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.reset {

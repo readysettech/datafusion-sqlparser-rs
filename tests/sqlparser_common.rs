@@ -472,6 +472,7 @@ fn parse_update_set_from() {
                         body: Box::new(SetExpr::Select(Box::new(Select {
                             select_token: AttachedToken::empty(),
                             optimizer_hint: None,
+                            readyset_hint: None,
                             distinct: None,
                             select_modifiers: None,
                             top: None,
@@ -5819,6 +5820,7 @@ fn test_parse_named_window() {
     let expected = Select {
         select_token: AttachedToken::empty(),
         optimizer_hint: None,
+        readyset_hint: None,
         distinct: None,
         select_modifiers: None,
         top: None,
@@ -6551,6 +6553,7 @@ fn parse_interval_and_or_xor() {
         body: Box::new(SetExpr::Select(Box::new(Select {
             select_token: AttachedToken::empty(),
             optimizer_hint: None,
+            readyset_hint: None,
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -8929,6 +8932,7 @@ fn lateral_function() {
     let expected = Select {
         select_token: AttachedToken::empty(),
         optimizer_hint: None,
+        readyset_hint: None,
         distinct: None,
         select_modifiers: None,
         top: None,
@@ -9932,6 +9936,7 @@ fn parse_merge() {
                         body: Box::new(SetExpr::Select(Box::new(Select {
                             select_token: AttachedToken::empty(),
                             optimizer_hint: None,
+                            readyset_hint: None,
                             distinct: None,
                             select_modifiers: None,
                             top: None,
@@ -12344,6 +12349,7 @@ fn parse_unload() {
                 body: Box::new(SetExpr::Select(Box::new(Select {
                     select_token: AttachedToken::empty(),
                     optimizer_hint: None,
+                    readyset_hint: None,
                     distinct: None,
                     select_modifiers: None,
                     top: None,
@@ -12665,6 +12671,7 @@ fn parse_connect_by() {
         Select {
             select_token: AttachedToken::empty(),
             optimizer_hint: None,
+            readyset_hint: None,
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -12732,6 +12739,7 @@ fn parse_connect_by() {
         Select {
             select_token: AttachedToken::empty(),
             optimizer_hint: None,
+            readyset_hint: None,
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -12800,6 +12808,7 @@ fn parse_connect_by() {
         Select {
             select_token: AttachedToken::empty(),
             optimizer_hint: None,
+            readyset_hint: None,
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -12888,6 +12897,7 @@ fn parse_connect_by() {
         Select {
             select_token: AttachedToken::empty(),
             optimizer_hint: None,
+            readyset_hint: None,
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -13851,6 +13861,7 @@ fn test_extract_seconds_ok() {
         body: Box::new(SetExpr::Select(Box::new(Select {
             select_token: AttachedToken::empty(),
             optimizer_hint: None,
+            readyset_hint: None,
             distinct: None,
             select_modifiers: None,
             top: None,
@@ -15992,6 +16003,7 @@ fn test_select_from_first() {
             body: Box::new(SetExpr::Select(Box::new(Select {
                 select_token: AttachedToken::empty(),
                 optimizer_hint: None,
+                readyset_hint: None,
                 distinct: None,
                 select_modifiers: None,
                 top: None,

@@ -13947,6 +13947,7 @@ impl<'a> Parser<'a> {
                 return Ok(Select {
                     select_token: AttachedToken(from_token),
                     optimizer_hint: None,
+                    readyset_hint: None,
                     distinct: None,
                     select_modifiers: None,
                     top: None,
@@ -13976,6 +13977,7 @@ impl<'a> Parser<'a> {
 
         let select_token = self.expect_keyword(Keyword::SELECT)?;
         let optimizer_hint = self.maybe_parse_optimizer_hint()?;
+        let readyset_hint = self.maybe_parse_readyset_hint()?;
         let value_table_mode = self.parse_value_table_mode()?;
 
         let (select_modifiers, distinct_select_modifier) =
@@ -14135,6 +14137,7 @@ impl<'a> Parser<'a> {
         Ok(Select {
             select_token: AttachedToken(select_token),
             optimizer_hint,
+            readyset_hint,
             distinct,
             select_modifiers,
             top,
@@ -14208,6 +14211,39 @@ impl<'a> Parser<'a> {
                         }
                     }
                 }
+                _ => return Ok(None),
+            }
+        }
+    }
+
+    /// Parses an optional ReadySet hint (`/*rs+ ... */`) at the current
+    /// token position. Skips over non-matching comments to find it.
+    fn maybe_parse_readyset_hint(&mut self) -> Result<Option<ReadysetHint>, ParserError> {
+        if !self.dialect.supports_readyset_hint() {
+            return Ok(None);
+        }
+        loop {
+            let t = self.peek_nth_token_no_skip_ref(0);
+            match &t.token {
+                Token::Whitespace(ws) => match ws {
+                    Whitespace::MultiLineComment(comment) => {
+                        // Extract matching text before consuming the token
+                        // to satisfy the borrow checker.
+                        let hint_text =
+                            comment.strip_prefix(READYSET_HINT_PREFIX).map(String::from);
+                        self.next_token_no_skip();
+                        if let Some(text) = hint_text {
+                            return Ok(Some(ReadysetHint { text }));
+                        }
+                        // Not a ReadySet hint — already consumed, keep looking
+                    }
+                    Whitespace::SingleLineComment { .. }
+                    | Whitespace::Space
+                    | Whitespace::Tab
+                    | Whitespace::Newline => {
+                        self.next_token_no_skip();
+                    }
+                },
                 _ => return Ok(None),
             }
         }

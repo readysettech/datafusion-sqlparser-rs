@@ -288,4 +288,8 @@ impl Dialect for PostgreSqlDialect {
     fn supports_interval_options(&self) -> bool {
         true
     }
+
+    fn supports_readyset_hint(&self) -> bool {
+        true
+    }
 }
