@@ -896,7 +896,7 @@ impl Spanned for Delete {
     fn span(&self) -> Span {
         let Delete {
             delete_token,
-            optimizer_hint: _,
+            optimizer_hints: _,
             tables,
             from,
             using,
@@ -930,7 +930,7 @@ impl Spanned for Update {
     fn span(&self) -> Span {
         let Update {
             update_token,
-            optimizer_hint: _,
+            optimizer_hints: _,
             table,
             assignments,
             from,
@@ -1294,7 +1294,7 @@ impl Spanned for Insert {
     fn span(&self) -> Span {
         let Insert {
             insert_token,
-            optimizer_hint: _,
+            optimizer_hints: _,
             or: _,     // enum, sqlite specific
             ignore: _, // bool
             into: _,   // bool
@@ -2238,7 +2238,7 @@ impl Spanned for Select {
     fn span(&self) -> Span {
         let Select {
             select_token,
-            optimizer_hint: _,
+            optimizer_hints: _,
             distinct: _, // todo
             select_modifiers: _,
             top: _, // todo, mysql specific
@@ -2832,7 +2832,7 @@ WHERE id = 1
         // ~ individual tokens within the statement
         let Statement::Merge(Merge {
             merge_token,
-            optimizer_hint: _,
+            optimizer_hints: _,
             into: _,
             table: _,
             source: _,
