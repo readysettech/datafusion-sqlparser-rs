@@ -1,3 +1,4 @@
+stacker = "0.1"
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -316,6 +317,14 @@ impl Dialect for PostgreSqlDialect {
     }
 
     fn supports_xml_expressions(&self) -> bool {
+        true
+    }
+
+    /// Postgres supports query optimizer hints via the `pg_hint_plan` extension,
+    /// using the same comment-prefixed-with-`+` syntax as MySQL and Oracle.
+    ///
+    /// See <https://github.com/ossc-db/pg_hint_plan>
+    fn supports_comment_optimizer_hint(&self) -> bool {
         true
     }
 }
