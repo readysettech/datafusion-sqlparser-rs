@@ -21,7 +21,9 @@
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::ops::ControlFlow;
 
-use crate::ast::{Expr, ObjectName, Query, Select, Statement, TableFactor, ValueWithSpan};
+use crate::ast::{
+    Expr, ObjectName, OrderBy, OrderByExpr, Query, Select, Statement, TableFactor, ValueWithSpan,
+};
 
 /// A type that can be visited by a [`Visitor`]. See [`Visitor`] for
 /// recursively visiting parsed SQL statements.
@@ -269,6 +271,32 @@ pub trait Visitor {
     fn post_visit_value(&mut self, _value: &ValueWithSpan) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }
+
+    /// Invoked for any `ORDER BY` clauses that appear in the AST before visiting children
+    fn pre_visit_order_by(&mut self, _order_by: &OrderBy) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any `ORDER BY` clauses that appear in the AST after visiting children
+    fn post_visit_order_by(&mut self, _order_by: &OrderBy) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any `ORDER BY` expressions that appear in the AST before visiting children
+    fn pre_visit_order_by_expr(
+        &mut self,
+        _order_by_expr: &OrderByExpr,
+    ) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any `ORDER BY` expressions that appear in the AST after visiting children
+    fn post_visit_order_by_expr(
+        &mut self,
+        _order_by_expr: &OrderByExpr,
+    ) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
 }
 
 /// A visitor that can be used to mutate an AST tree.
@@ -395,6 +423,32 @@ pub trait VisitorMut {
 
     /// Invoked for any statements that appear in the AST after visiting children
     fn post_visit_value(&mut self, _value: &mut ValueWithSpan) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any `ORDER BY` clauses that appear in the AST before visiting children
+    fn pre_visit_order_by(&mut self, _order_by: &mut OrderBy) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any `ORDER BY` clauses that appear in the AST after visiting children
+    fn post_visit_order_by(&mut self, _order_by: &mut OrderBy) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any `ORDER BY` expressions that appear in the AST before visiting children
+    fn pre_visit_order_by_expr(
+        &mut self,
+        _order_by_expr: &mut OrderByExpr,
+    ) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    /// Invoked for any `ORDER BY` expressions that appear in the AST after visiting children
+    fn post_visit_order_by_expr(
+        &mut self,
+        _order_by_expr: &mut OrderByExpr,
+    ) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }
 }
@@ -789,6 +843,34 @@ mod tests {
             self.visited.push(format!("POST: STATEMENT: {statement}"));
             ControlFlow::Continue(())
         }
+
+        fn pre_visit_order_by(&mut self, order_by: &OrderBy) -> ControlFlow<Self::Break> {
+            self.visited.push(format!("PRE: ORDER BY: {order_by}"));
+            ControlFlow::Continue(())
+        }
+
+        fn post_visit_order_by(&mut self, order_by: &OrderBy) -> ControlFlow<Self::Break> {
+            self.visited.push(format!("POST: ORDER BY: {order_by}"));
+            ControlFlow::Continue(())
+        }
+
+        fn pre_visit_order_by_expr(
+            &mut self,
+            order_by_expr: &OrderByExpr,
+        ) -> ControlFlow<Self::Break> {
+            self.visited
+                .push(format!("PRE: ORDER BY EXPR: {order_by_expr}"));
+            ControlFlow::Continue(())
+        }
+
+        fn post_visit_order_by_expr(
+            &mut self,
+            order_by_expr: &OrderByExpr,
+        ) -> ControlFlow<Self::Break> {
+            self.visited
+                .push(format!("POST: ORDER BY EXPR: {order_by_expr}"));
+            ControlFlow::Continue(())
+        }
     }
 
     fn do_visit<V: Visitor<Break = ()>>(sql: &str, visitor: &mut V) -> Statement {
@@ -965,8 +1047,12 @@ mod tests {
                     "POST: EXPR: 'APR'",
                     "POST: TABLE FACTOR: monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d)",
                     "POST: SELECT: SELECT * FROM monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d)",
+                    "PRE: ORDER BY: ORDER BY EMPID",
+                    "PRE: ORDER BY EXPR: EMPID",
                     "PRE: EXPR: EMPID",
                     "POST: EXPR: EMPID",
+                    "POST: ORDER BY EXPR: EMPID",
+                    "POST: ORDER BY: ORDER BY EMPID",
                     "POST: QUERY: SELECT * FROM monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ORDER BY EMPID",
                     "POST: STATEMENT: SELECT * FROM monthly_sales PIVOT(SUM(a.amount) FOR a.MONTH IN ('JAN', 'FEB', 'MAR', 'APR')) AS p (c, d) ORDER BY EMPID",
                 ]
@@ -978,6 +1064,31 @@ mod tests {
                     "PRE: RELATION: t1",
                     "POST: RELATION: t1",
                     "POST: STATEMENT: SHOW COLUMNS FROM t1",
+                ],
+            ),
+            (
+                "SELECT * FROM t1 ORDER BY a DESC, b",
+                vec![
+                    "PRE: STATEMENT: SELECT * FROM t1 ORDER BY a DESC, b",
+                    "PRE: QUERY: SELECT * FROM t1 ORDER BY a DESC, b",
+                    "PRE: SELECT: SELECT * FROM t1",
+                    "PRE: TABLE FACTOR: t1",
+                    "PRE: RELATION: t1",
+                    "POST: RELATION: t1",
+                    "POST: TABLE FACTOR: t1",
+                    "POST: SELECT: SELECT * FROM t1",
+                    "PRE: ORDER BY: ORDER BY a DESC, b",
+                    "PRE: ORDER BY EXPR: a DESC",
+                    "PRE: EXPR: a",
+                    "POST: EXPR: a",
+                    "POST: ORDER BY EXPR: a DESC",
+                    "PRE: ORDER BY EXPR: b",
+                    "PRE: EXPR: b",
+                    "POST: EXPR: b",
+                    "POST: ORDER BY EXPR: b",
+                    "POST: ORDER BY: ORDER BY a DESC, b",
+                    "POST: QUERY: SELECT * FROM t1 ORDER BY a DESC, b",
+                    "POST: STATEMENT: SELECT * FROM t1 ORDER BY a DESC, b",
                 ],
             ),
         ];
