@@ -4946,3 +4946,37 @@ fn parse_adjacent_string_literal_concatenation() {
 fn parse_group_by_with_rollup() {
     mysql().verified_stmt("SELECT * FROM tbl GROUP BY col1, col2 WITH ROLLUP");
 }
+
+#[test]
+fn parse_zerofill() {
+    for data_type in [
+        "TINYINT",
+        "SMALLINT",
+        "MEDIUMINT",
+        "INT",
+        "INTEGER",
+        "BIGINT",
+        "INT2",
+        "INT4",
+        "INT8",
+        "DECIMAL",
+        "DEC",
+        "NUMERIC",
+        "FLOAT",
+        "FLOAT4",
+        "FLOAT8",
+        "DOUBLE",
+        "REAL",
+    ] {
+        mysql_and_generic().verified_stmt(&format!("CREATE TABLE t (a {data_type} ZEROFILL)"));
+    }
+    mysql_and_generic().verified_stmt("CREATE TABLE t (a INT(10) UNSIGNED ZEROFILL)");
+    assert!(mysql_and_generic()
+        .parse_sql_statements("CREATE TABLE t (a VARCHAR(10) ZEROFILL)")
+        .is_err());
+    assert!(
+        all_dialects_except(|d| d.supports_data_type_zerofill_suffix())
+            .parse_sql_statements("CREATE TABLE t (a INT ZEROFILL)")
+            .is_err()
+    );
+}

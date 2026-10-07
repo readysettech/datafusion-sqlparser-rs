@@ -13201,6 +13201,10 @@ impl<'a> Parser<'a> {
             _ => self.expected_at("a data type name", next_token_index),
         }?;
 
+        if self.is_zerofill_allowed(next_token_index) && self.parse_keyword(Keyword::ZEROFILL) {
+            data = DataType::Zerofill(Box::new(data));
+        }
+
         if self.dialect.supports_array_typedef_with_brackets() {
             while self.consume_token(&Token::LBracket) {
                 // Parse optional array data type size
@@ -13224,6 +13228,35 @@ impl<'a> Parser<'a> {
         }
 
         Ok((data, trailing_bracket))
+    }
+
+    fn is_zerofill_allowed(&self, token_index: usize) -> bool {
+        if !self.dialect.supports_data_type_zerofill_suffix() {
+            return false;
+        }
+        match &self.token_at(token_index).token {
+            Token::Word(w) => matches!(
+                w.keyword,
+                Keyword::TINYINT
+                    | Keyword::SMALLINT
+                    | Keyword::MEDIUMINT
+                    | Keyword::INT
+                    | Keyword::INTEGER
+                    | Keyword::BIGINT
+                    | Keyword::INT2
+                    | Keyword::INT4
+                    | Keyword::INT8
+                    | Keyword::DECIMAL
+                    | Keyword::DEC
+                    | Keyword::NUMERIC
+                    | Keyword::FLOAT
+                    | Keyword::FLOAT4
+                    | Keyword::FLOAT8
+                    | Keyword::DOUBLE
+                    | Keyword::REAL
+            ),
+            _ => false,
+        }
     }
 
     fn parse_returns_table_column(&mut self) -> Result<ColumnDef, ParserError> {
