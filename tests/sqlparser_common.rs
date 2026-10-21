@@ -20856,3 +20856,92 @@ fn parse_window_spec_keyword_base_window_name() {
         "SELECT count(*) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM t",
     );
 }
+
+#[test]
+fn tokenize_identifier_prefixes_and_unicode_spans() {
+    let suffixes = [
+        String::new(),
+        "_name".to_owned(),
+        "alpha".to_owned(),
+        "é".to_owned(),
+        "漢字".to_owned(),
+        "λ".to_owned(),
+        "\u{0301}".to_owned(),
+        "a".repeat(128),
+    ];
+    for dialect in all_dialects().dialects {
+        for prefix in [
+            "a", "b", "B", "n", "N", "nq", "NQ", "nQ", "Nq", "q", "Q", "r", "R", "x", "X", "e",
+            "E", "u", "U", "é", "漢", "λ",
+        ] {
+            for suffix in &suffixes {
+                let word = format!("{prefix}{suffix}");
+                let mut chars = word.chars();
+                if !dialect.is_identifier_start(chars.next().unwrap())
+                    || !chars.all(|ch| dialect.is_identifier_part(ch))
+                {
+                    continue;
+                }
+                let sql = format!("\n{word}\t/*tail*/");
+                let tokens = Tokenizer::new(&*dialect, &sql)
+                    .tokenize_with_location()
+                    .unwrap();
+                assert_eq!(
+                    tokens.iter().map(|t| t.token.clone()).collect::<Vec<_>>(),
+                    vec![
+                        Token::Whitespace(Whitespace::Newline),
+                        Token::make_word(&word, None),
+                        Token::Whitespace(Whitespace::Tab),
+                        Token::Whitespace(Whitespace::MultiLineComment("tail".to_owned())),
+                    ],
+                    "{dialect:?}: {sql:?}"
+                );
+                assert_eq!(
+                    tokens[1].span,
+                    Span::new(
+                        Location::new(2, 1),
+                        Location::new(2, word.chars().count() as u64 + 1)
+                    ),
+                    "{dialect:?}: {sql:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn tokenize_identifier_at_eof_and_before_error() {
+    for dialect in all_dialects().dialects {
+        let word = "nQalpha";
+        let tokens = Tokenizer::new(&*dialect, word)
+            .tokenize_with_location()
+            .unwrap();
+        assert_eq!(tokens.len(), 1, "{dialect:?}");
+        assert_eq!(tokens[0].token, Token::make_word(word, None));
+        assert_eq!(
+            tokens[0].span,
+            Span::new(Location::new(1, 1), Location::new(1, 8))
+        );
+
+        let mut buf = tokens.clone();
+        let error = Tokenizer::new(&*dialect, "nQalpha '")
+            .tokenize_with_location_into_buf(&mut buf)
+            .unwrap_err();
+        assert_eq!(error.message, "Unterminated string literal", "{dialect:?}");
+        // Quote error positions differ by dialect.
+        let quote_error = Tokenizer::new(&*dialect, "'").tokenize().unwrap_err();
+        assert_eq!(
+            error.location,
+            Location::new(1, quote_error.location.column + word.len() as u64 + 1),
+            "{dialect:?}"
+        );
+        assert_eq!(buf.len(), 3, "{dialect:?}");
+        assert_eq!(buf[0], tokens[0]);
+        assert_eq!(buf[1], tokens[0]);
+        assert_eq!(buf[2].token, Token::Whitespace(Whitespace::Space));
+        assert_eq!(
+            buf[2].span,
+            Span::new(Location::new(1, 8), Location::new(1, 9))
+        );
+    }
+}

@@ -16,7 +16,7 @@
 // under the License.
 
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
-use sqlparser::dialect::{GenericDialect, PostgreSqlDialect, SQLiteDialect};
+use sqlparser::dialect::{GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect};
 use sqlparser::keywords::Keyword;
 use sqlparser::parser::Parser;
 use sqlparser::tokenizer::{Span, Tokenizer, Word};
@@ -297,6 +297,25 @@ fn parse_function_arg_call_chain(c: &mut Criterion) {
     group.finish();
 }
 
+fn tokenize_identifiers(c: &mut Criterion) {
+    let mut group = c.benchmark_group("tokenize_identifiers");
+    let dialect = MySqlDialect {};
+    for len in [8, 128] {
+        let word = "a".repeat(len);
+        let sql = format!("SELECT {word}, {word} FROM {word} WHERE {word} = 42");
+        group.bench_function(format!("length_{len}"), |b| {
+            b.iter(|| {
+                std::hint::black_box(
+                    Tokenizer::new(&dialect, std::hint::black_box(&sql))
+                        .tokenize_with_location()
+                        .unwrap(),
+                );
+            });
+        });
+    }
+    group.finish();
+}
+
 fn mixed_queries() -> Vec<&'static str> {
     vec![
         include_str!("../../tests/queries/tpch/1.sql"),
@@ -366,6 +385,7 @@ fn mixed_sql(c: &mut Criterion) {
 criterion_group!(
     benches,
     basic_queries,
+    tokenize_identifiers,
     mixed_sql,
     word_to_ident,
     parse_many_identifiers,

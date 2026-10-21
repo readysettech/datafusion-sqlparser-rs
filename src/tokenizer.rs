@@ -824,18 +824,24 @@ impl State<'_> {
         self.peekable.peek()
     }
 
-    /// Collect matching characters into a new string, leaving the first
-    /// non-matching character unread.
-    fn peeking_take_while(&mut self, mut predicate: impl FnMut(char) -> bool) -> String {
-        let mut s = String::new();
+    /// Append matching characters to `output`, leaving the first non-matching
+    /// character unread.
+    fn peeking_read_while(&mut self, output: &mut String, mut predicate: impl FnMut(char) -> bool) {
         while let Some(&ch) = self.peek() {
             if predicate(ch) {
-                self.next(); // consume
-                s.push(ch);
+                self.next();
+                output.push(ch);
             } else {
                 break;
             }
         }
+    }
+
+    /// Collect matching characters into a new string, leaving the first
+    /// non-matching character unread.
+    fn peeking_take_while(&mut self, predicate: impl FnMut(char) -> bool) -> String {
+        let mut s = String::new();
+        self.peeking_read_while(&mut s, predicate);
         s
     }
 
@@ -1063,8 +1069,7 @@ impl<'a> Tokenizer<'a> {
                 col: 0,
             };
             let mut s = inner_state.peeking_take_while(|ch| matches!(ch, '0'..='9' | '.'));
-            let s2 = chars.peeking_take_while(|ch| matches!(ch, '0'..='9' | '.'));
-            s += s2.as_str();
+            chars.peeking_read_while(&mut s, |ch| matches!(ch, '0'..='9' | '.'));
             return Ok(Some(Token::Number(s, false)));
         }
 
@@ -1470,11 +1475,12 @@ impl<'a> Tokenizer<'a> {
                         if exponent_part.is_empty() {
                             // If it is not a number with an exponent, it may be
                             // an identifier starting with digits.
-                            let word =
-                                chars.peeking_take_while(|ch| self.dialect.is_identifier_part(ch));
+                            let prefix_len = s.len();
+                            chars.peeking_read_while(&mut s, |ch| {
+                                self.dialect.is_identifier_part(ch)
+                            });
 
-                            if !word.is_empty() {
-                                s += word.as_str();
+                            if s.len() != prefix_len {
                                 return Ok(Some(Token::make_word_owned(s, None)));
                             }
                         } else if prev_token == Some(&Token::Period) {
@@ -1990,12 +1996,12 @@ impl<'a> Tokenizer<'a> {
                 }))
             };
         } else {
-            value.push_str(&chars.peeking_take_while(|ch| {
+            chars.peeking_read_while(&mut value, |ch| {
                 ch.is_alphanumeric()
                     || ch == '_'
                     // Allow $ as a placeholder character if the dialect supports it
                     || matches!(ch, '$' if self.dialect.supports_dollar_placeholder())
-            }));
+            });
 
             // If the dialect supports a dollar sign as a money prefix (e.g. SQL Server),
             // and the value so far is all digits, check for a decimal part, e.g. `$123.45`
@@ -2006,7 +2012,7 @@ impl<'a> Tokenizer<'a> {
             {
                 value.push('.');
                 chars.next();
-                value.push_str(&chars.peeking_take_while(|ch| ch.is_ascii_digit()));
+                chars.peeking_read_while(&mut value, |ch| ch.is_ascii_digit());
                 return Ok(Token::Placeholder(format!("${value}")));
             }
 
@@ -2105,7 +2111,7 @@ impl<'a> Tokenizer<'a> {
     /// Tokenize an identifier or keyword, after the first char is already consumed.
     fn tokenize_word(&self, first_chars: impl Into<String>, chars: &mut State) -> String {
         let mut s = first_chars.into();
-        s.push_str(&chars.peeking_take_while(|ch| self.dialect.is_identifier_part(ch)));
+        chars.peeking_read_while(&mut s, |ch| self.dialect.is_identifier_part(ch));
         s
     }
 
@@ -4684,5 +4690,36 @@ mod tests {
             ],
             tokens,
         );
+    }
+    #[test]
+    fn peeking_read_while_appends_and_preserves_boundaries() {
+        for (sql, suffix, location, inspected, remainder) in [
+            ("", "", Location::new(7, 3), "", ""),
+            ("!tail", "", Location::new(7, 3), "!", "!tail"),
+            ("abc", "abc", Location::new(7, 6), "abc", ""),
+            ("abc,def", "abc", Location::new(7, 6), "abc,", ",def"),
+            ("é\nz!tail", "é\nz", Location::new(8, 2), "é\nz!", "!tail"),
+            ("é\nz", "é\nz", Location::new(8, 2), "é\nz", ""),
+        ] {
+            let mut chars = State {
+                peekable: sql.chars().peekable(),
+                line: 7,
+                col: 3,
+            };
+            let mut output = String::from("prefix:");
+            let mut seen = String::new();
+            chars.peeking_read_while(&mut output, |ch| {
+                seen.push(ch);
+                ch != '!' && ch != ','
+            });
+            assert_eq!(output, format!("prefix:{suffix}"), "{sql:?}");
+            assert_eq!(seen, inspected, "{sql:?}");
+            assert_eq!(chars.location(), location, "{sql:?}");
+            assert_eq!(
+                core::iter::from_fn(|| chars.next()).collect::<String>(),
+                remainder,
+                "{sql:?}"
+            );
+        }
     }
 }
